@@ -4,19 +4,19 @@ from transformers import pipeline
 import torch
 import base64
 import textwrap
-from langchain_community.embeddings import SentenceTransformerEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import Chroma
 from langchain_community.llms import HuggingFacePipeline
 from langchain.chains import RetrievalQA
 
-# model and tokenizer loading
-checkpoint = "LaMini-T5-738M"
+# Use a publicly available model
+checkpoint = "t5-small"  # Change to a valid model identifier
 tokenizer = AutoTokenizer.from_pretrained(checkpoint)
 base_model = AutoModelForSeq2SeqLM.from_pretrained(
     checkpoint, 
     device_map='cpu', 
-    torch_dtype=torch.float32)
-
+    torch_dtype=torch.float32
+)
 
 @st.cache_resource
 def llm_pipeline():
@@ -32,33 +32,21 @@ def llm_pipeline():
     local_llm = HuggingFacePipeline(pipeline=pipe)
     return local_llm
 
-
 @st.cache_resource
 def qa_llm():
     llm = llm_pipeline()
-    embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
     db = Chroma(persist_directory="db", embedding_function=embeddings)
     retriever = db.as_retriever()
     qa = RetrievalQA.from_chain_type(
         llm=llm, chain_type="stuff", retriever=retriever, return_source_documents=True)
     return qa
 
-
 def process_answer(instruction):
-    response = ''
-    instruction = instruction
     qa = qa_llm()
     generated_text = qa(instruction)
     answer = generated_text['result']
-    # metadata = generated_text['metadata']
-    # for text in generated_text:
-
-    #     print(answer)
-
-    # wrapped_text = textwrap.fill(response, 100)
-    # return wrapped_text
     return answer, generated_text
-
 
 def main():
     st.title("Search Your PDF 🐦📄")
@@ -71,12 +59,10 @@ def main():
     question = st.text_area("Enter your Question")
     if st.button("Ask"):
         st.info("Your Question: " + question)
-
         st.info("Your Answer")
         answer, metadata = process_answer(question)
         st.write(answer)
         st.write(metadata)
-
 
 if __name__ == '__main__':
     main()
